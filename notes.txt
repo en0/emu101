@@ -1,0 +1,59 @@
+## Thinking about the assembly language
+
+# From memory
+lda some_const # Load a with some_constant
+ldr r1         # Load r1 with the data pointed to by a
+ldr r2         # Load r1 with the data pointed to by a
+str r1         # Store r1 into the memory pointed to by a
+str r2         # Store r2 into the memory pointed to by a
+
+# Transfer
+mov r2,r1      # move the value in r1 into r2
+mov r1,r2      # move the value in r2 into r1
+mov a,r1       # move the value in r1 into a
+mov a,r2       # move the value in r2 into a
+mov r1,a       # move the value in a into r1
+mov r2,a       # move the value in a into r2
+
+# Increment/Decrement
+inc a          # Increment a
+inc r1         # Increment r1
+inc r2         # Increment r2
+dec a          # decrement a
+dec r1         # decrement r1
+dec r2         # decrement r2
+
+# Math
+add            # r1 + r2
+sub            # r1 - r2
+
+# Bitwise
+and            # r1 & r2
+or             # r1 | r2
+xor            # r1 ^ r2
+not r1         # not(r1)
+not r2         # not(r2)
+
+# Stack
+push r1        # push r1 onto the stack
+push r2        # push r2 onto the stack
+push a         # push a onto the stack
+pushf          # push flags onto stack
+pusha          # pushs a, r1, r2, flags onto the stack
+
+pop r1        # pop r1 from the stack
+pop r2        # pop r2 from the stack
+pop a         # pop a from the stack
+popf          # pop flags from stack
+popa          # pops a, r1, r2, flags from the stack
+
+# Comparison
+cmp           # Compaire r1 and r2 and set flags
+              # if r1 == r2 = zf=1, sf=0
+              # if r1 < r2 = zf=0, sf=0
+              # if r1 > r2 = zf=0, sf=1
+
+# Jumps - http://www.unixwiz.net/techtips/x86-jumps.html
+jmp
+jz
+jn

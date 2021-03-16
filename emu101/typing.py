@@ -1,4 +1,4 @@
-from ctypes import c_uint16, c_uint8
+from ctypes import c_uint16, c_uint8, c_bool
 from abc import ABC, abstractmethod
 
 
