@@ -1,35 +1,71 @@
-SY| Name                            | Initial
-==============================================
-A | Accumulator                     | 0x00
-X | Register X                      | 0x00
-Y | Register Y                      | 0x00
-PC| Program Counter (16 bit)        | 0xfffc
-SP| Stack Pointer                   | 0xff
-SR| Status Register FLAGS:NV-BDIZC  | 0x00
+# Using HACK assembly
+
+SY | Name                            | Initial
+===============================================
+A  | Address Register                | 0x0000
+D  | Data Register                   | 0x0000
+PC | Program Counter                 | 0xfffc
+SP | Stack Pointer                   | 0x01FF
 
 START  | END    | Content           | Size
 ==============================================
-0x0000 | 0x00FF | Zero Page         |
-0x0100 | 0x01FF | Stack             |
-0x0200 | 0xEFFF | General Purpose   |
-0xF000 | 0xFFFF | PROG              |
+0x0000 | 0x01FF | Stack             | 512
+0x0200 | 0xEFFF | General Purpose   | 59.5k
+0xF000 | 0xFFFF | PROG              | 4k
+
+# Computation Instruction
+
+1--ACCCC CCDDDJJJ
+^ Denotes a c-instruction
+
+Instruction Decoding
+Part    | Description
+==============================
+A       | By-Reference Mode
+CCCCCC  | Computation selector
+DDD     | Destination Selector
+JJJ     | Jump
+
+Destination Selector
+Code | Name       | Description
+==================================================
+ 000 | None       | Disregard result
+ 001 | A          | Store into A
+ 010 | D          | Store into D
+ 100 | Memory[A]  | Store into Memory @ A
+
+Jump Selector - Jump to address stored in A
+Code | Name       | Description
+==================================================
+ 000 |            | No jump instruction
+ 001 | JGT        | Jump if _out_ > 0
+ 010 | JEQ        | Jump if _out_ = 0
+ 011 | JGE        | Jump if _out_ >= 0
+ 100 | JLT        | Jump if _out_ < 0
+ 101 | JNE        | Jump if _out_ != 0
+ 110 | JLE        | Jump if _out_ <= 0
+ 111 | JMP        | Jump
+
+# Address Instruction
+
+0VVVVVVV VVVVVVVV
+^ Denotes an a-instruction
+
+Instruction Decoding
+Part             | Description
+==========================================================
+VVVVVVV VVVVVVVV | 15 bit value to store in the A register
+
+--- 
+
+// Some example assembly
+
+@0
+M=1  // Memory[0]=1
 
 
-
-
-0xFFFF
-0x00FF
-0x000F
-
-
-
-
-
-
-
-
-
-
+mov (a), d
+mov d, (a)
 
 
 
