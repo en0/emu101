@@ -1,3 +1,43 @@
+SY| Name                            | Initial
+==============================================
+A | Accumulator                     | 0x00
+X | Register X                      | 0x00
+Y | Register Y                      | 0x00
+PC| Program Counter (16 bit)        | 0xfffc
+SP| Stack Pointer                   | 0xff
+SR| Status Register FLAGS:NV-BDIZC  | 0x00
+
+START  | END    | Content           | Size
+==============================================
+0x0000 | 0x00FF | Zero Page         |
+0x0100 | 0x01FF | Stack             |
+0x0200 | 0xEFFF | General Purpose   |
+0xF000 | 0xFFFF | PROG              |
+
+
+
+
+0xFFFF
+0x00FF
+0x000F
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # instruction template
 [00000000]
 
@@ -5,6 +45,20 @@
 0xxxxxxx <-    No argument
 10xxxxxx <- Load Immediate
 11xxxxxx <- Load Address
+
+# Registers
+MP  # Memory Pointer
+SP  # Stack Pointer
+IP  # Instruction Pointer
+A   # A Register
+B   # B Register
+FG  # Flags (ZF, CF, OF, SF, HF, IF)
+
+ldmp $ref       # 
+load %reg       # reg={a, b}
+store %reg      # reg={a, b}
+move %reg, %reg # reg={a, b, mp}
+move %reg, !val # reg={a, b, mp}
 
 ## Thinking about the assembly language
 
