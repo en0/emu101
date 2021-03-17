@@ -14,7 +14,7 @@ class CPU:
         self.pc = c_uint16(0xfffc)
         self.sp = c_uint16(0x1000)
 
-        # Flags
+        # Flags - I d ont know about hese
         self.if = c_bool(False) # Interrupt Flag
         self.cf = c_bool(False) # Carry Flag
         self.zf = c_bool(False) # Zero Flag

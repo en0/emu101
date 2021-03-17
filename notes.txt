@@ -1,3 +1,11 @@
+# instruction template
+[00000000]
+
+# Internal
+0xxxxxxx <-    No argument
+10xxxxxx <- Load Immediate
+11xxxxxx <- Load Address
+
 ## Thinking about the assembly language
 
 # From memory
@@ -54,6 +62,37 @@ cmp           # Compaire r1 and r2 and set flags
               # if r1 > r2 = zf=0, sf=1
 
 # Jumps - http://www.unixwiz.net/techtips/x86-jumps.html
-jmp
-jz
-jn
+jmp           # jmp $immeidate
+je            # jmp if %ZF == 1
+jne           # jmp if %ZF == 0
+jg            # jmp if %ZF == 0 AND %SF == %OF
+jge           # jmp if %SF == %OF
+jl            # jmp if %SF != %OF
+jle           # jmp if %ZF is 1 OR %SF != %OF
+jc            # jmp if %CF == 1
+jnc           # jmp if %CF == 0
+jo            # jmp if %OF == 1
+jno           # jmp if %OF == 0
+js            # jmp if %SF == 1
+jns           # jmp if %SF == 0
+ja            # jmp if %CF == 0 AND %ZF == 0
+jae           # jmp if %CF == 0
+jb            # jmp if %CF == 1
+jbe           # jmp if %CF == 1 OR %ZF == 1
+
+# Relisting Jumps and consolidating opcodes to reduce number of bytecodes
+jmp           # jmp $immeidate
+je            # jmp if %ZF == 1
+jne           # jmp if %ZF == 0
+jg            # jmp if %ZF == 0 AND %SF == %OF
+jge           # jmp if %SF == %OF
+jl            # jmp if %SF != %OF
+jle           # jmp if %ZF is 1 OR %SF != %OF
+jo            # jmp if %OF == 1
+jno           # jmp if %OF == 0
+js            # jmp if %SF == 1
+jns           # jmp if %SF == 0
+jnc/jae       # jmp if %CF == 0
+ja            # jmp if %CF == 0 AND %ZF == 0
+jc/jb         # jmp if %CF == 1
+jbe           # jmp if %CF == 1 OR %ZF == 1
