@@ -1,0 +1,245 @@
+
+EMU101 16 Architecture Instruction Brainstorm
+════════════════════════════════════════════════════════════════════════════════
+
+
+Instruction Pipeline Loading
+
+Each instruction consists of a single 16 bit word and an optional immediate
+16 bit word. Each fetch cycle ensures the pipeline has two 16 bit words loaded.
+
+The Instruction Pointer is moved forward by 2 with each word fetched. The
+values are interprated as 16 bit unsinged integers and pushed into a queue
+called the Instruction Pipeline (PIPLINE).
+
+Memory (Byte order is little-endian):
+
+  ┌──┬──┬──┬──┐
+  │ab│cd│ef│01│ PIPELINE:
+  └──┴──┴──┴──┘
+   ↑(IP+0)
+  ┌──┬──┬──┬──┐
+  │ab│cd│ef│01│ PIPELINE: 0xCDAB
+  └──┴──┴──┴──┘
+         ↑(IP+2)
+  ┌──┬──┬──┬──┐
+  │ab│cd│ef│01│ PIPELINE: 0xCDAB, 0x01EF
+  └──┴──┴──┴──┘
+               ↑(IP+4)
+
+Each fetch cycle ensures 2 values exist in the instruction pipeline.
+
+After the pipeline is filled, the first value is pulled and used as instruction.
+  0xCDAB is popped from PIPELINE and stored in the Instruction Register
+
+If applicable, the second value is pulled and used as immediate.
+  0x01EF is popped from PIPELINE and stored in immediate register IF S=11*
+
+During next fetch cycle, if the immediate register is used, 2 words will
+be loaded into the pipeline.
+
+If the immediate was not used, only 1 word will be loaded into the pipline and
+the last word fetched from the previous cycle will be used as the instruction.
+
+*See Instruction Structure, Source Select for more detail.
+
+┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+
+Instruction Decoding
+
+Each instruction is a single 16 bit word. The single word can be used to preform
+every operation of the EMU101 processor. The instruction is split into 6 parts.
+
+  Instruction Word Structure
+  ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐
+  │W│A│A│C│C│C│C│C│S│S│D│D│D│J│J│J│ 
+  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+
+
+I/O Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Sets Write Signal on the Data bus
+Size: 1 bit
+Symbol: W
+
+   0 │ Result
+  ───┼─────────
+   0 │ Read
+   1 │ Write
+
+
+Addess Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Selects a register for address line output
+Size: 2 bits
+Symbol: A
+
+   0 1 │ ADDR
+  ─────┼─────────
+   0 0 │ DP+D0
+   0 1 │ DP
+   1 0 │ --SP
+   1 1 │ SP++
+
+
+Computation Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Select the computation mode for the ALU
+Size: 5 bits
+Symbol: C
+
+   0 1 2 3 4 │ Operation
+  ───────────┼──────────
+   0 0 0 0 0 │ D0-D0 (nop)
+   0 0 0 0 1 │ D0-D1
+   0 0 0 1 0 │ D0-D2
+   0 0 0 1 1 │ D0
+   0 0 1 0 0 │ D0+D0
+   0 0 1 0 1 │ D0+D1
+   0 0 1 1 0 │ D0+D2
+   0 0 1 1 1 │ D1
+   0 1 0 0 0 │ D0&D0
+   0 1 0 0 1 │ D0&D1
+   0 1 0 1 0 │ D0&D2
+   0 1 0 1 1 │ D2
+   0 1 1 0 0 │ D0|D0
+   0 1 1 0 1 │ D0|D1
+   0 1 1 1 0 │ D0|D2
+   0 1 1 1 1 │ *roll(D0)
+   1 0 0 0 0 │ D0^D0
+   1 0 0 0 1 │ D0^D1
+   1 0 0 1 0 │ D0^D2
+   1 0 0 1 1 │ IP
+   1 0 1 0 0 │ INC(D0)
+   1 0 1 0 1 │ INC(D1)
+   1 0 1 1 0 │ INC(D2)
+   1 0 1 1 1 │ SP
+   1 1 0 0 0 │ DEC(D0)
+   1 1 0 0 1 │ DEC(D1)
+   1 1 0 1 0 │ DEC(D2)
+   1 1 0 1 1 │ DP
+   1 1 1 0 0 │ NOT(D0)
+   1 1 1 0 1 │ NOT(D1)
+   1 1 1 1 0 │ NOT(D2)
+   1 1 1 1 1 │ *rolr(D0)
+
+
+Source Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Select the data source
+Size: 2 bits
+Symbol: S
+
+   0 1 │ SRC
+  ─────┼─────────
+   0 0 │ ZERO
+   0 1 │ ALU
+   1 0 │ DATA BUS
+   1 1 │ IMMEDIATE
+
+
+Destination Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Select the destination register
+Size: 3 bits
+Symbol: D
+
+   0 1 2 │ DST
+  ───────┼─────────
+   0 0 0 │ D0
+   0 0 1 │ D1
+   0 1 0 │ D2
+   0 1 1 │ NOP
+   1 0 0 │ IP
+   1 0 1 │ SP
+   1 1 0 │ DP
+   1 1 1 │ NOP
+
+
+Condition Select
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Description: Defines a Condition that must evaluate to true to store the result.
+Size: 3 bits
+Symbol: J
+
+   0 1 2 │ DST
+  ───────┼─────────
+   0 0 0 │ False
+   0 0 1 │ LT
+   0 1 0 │ EQ
+   0 1 1 │ LE
+   1 0 0 │ GT
+   1 0 1 │ NE
+   1 1 0 │ GE
+   1 1 1 │ True
+
+┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+Examples
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────────────────────────────────────┐
+  │ LDP - Load immediate into Data Pointer (DP)        │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 0 -- ----- 11 110 111     # - can be anything      │
+  │ 0000 0000 1111 0111       # Assuming zero for -    │
+  │ 0    0    F    7          # Convert to hex         │
+  │ 0x00F7 -> LDP                                      │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ TD0D1 - Transfer D0 to D1                          │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 0 -- 00011 01 001 111                              │
+  │ 0000 0011 0100 1111                                │
+  │ 0    3    4    F                                   │
+  │ 0x034F -> TD0D1                                    │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ RD0 - Read data at (DP) and store in D0            │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 1 01 00000 10 000 111                              │
+  │ 1010 0000 1000 0111                                │
+  │ A    0    8    7                                   │
+  │ 0xA087 -> RD0                                      │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ D2=D0-D1; W - Compute D2 as D0-D1 and write to (DP)│
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 1 01 00001 01 010 111                              │
+  │ 1010 0001 0101 0111                                │
+  │ A    1    5    7                                   │
+  │ 0xA157 -> not sure what the mnemonic looks like.   │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ D0-D1; JGE [ADDR] - Jump to ADDR if D0 >= D1       │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 0 -- 00001 11 100 110                              │
+  │ 1000 0001 1110 0110                                │
+  │ A    1    D    6                                   │
+  │ 0xA1D6 0xFFFC -> D0-D1; JGE 0xfffc                 │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ JSR [ADDR] - Jump to subroutine at ADDR            │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 1 10 10011 11 100 111                              │
+  │ 1101 0011 1110 0111                                │
+  │ C    3    D    7                                   │
+  │ 0xC3D7 ?print -> JSR :print                        │
+  └────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────┐
+  │ PUSH D0|D2 - Push the result of (D1 OR D2)         │
+  ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┥
+  │ 1 10 01110 00 111 111                              │
+  │ 1100 1110 0011 1111                                │
+  │ B    D    3    F                                   │
+  │ 0xBD3F -> PUSH D0|D2                               │
+  └────────────────────────────────────────────────────┘
+
+
