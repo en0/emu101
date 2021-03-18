@@ -22,9 +22,17 @@ class LoadRegTest(unittest.TestCase):
         self.emu.run()
         self.assertEqual(self.emu.cpu.dp.value, 0xabcd)
         
+    @unittest.skip('WIP')
     def test_hlt(self):
         self.load_rom([
             0b0000000000000000, #hlt
         ])
         self.emu.run()
         self.assertEqual(self.emu.cpu.dp.value, 0xabcd)
+
+    def test_loads_pipeline(self):
+        self.load_rom([
+            0b0000000000000000, #hlt
+        ])
+        self.emu.run()
+        self.assertEqual(len(self.emu.cpu.pipeline), 2)
