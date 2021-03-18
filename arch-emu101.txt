@@ -1,39 +1,90 @@
 
-EMU101 16 Architecture Instruction Brainstorm
+EMU101 16 Architecture Brainstorm
 ════════════════════════════════════════════════════════════════════════════════
+
+This document might be considered the EMU101 architecture whitepaper. The EMU101
+is a fictitious system architecture that I created while I was board during the
+Covid-19 isolation.
+
+The architecture focuses on simplicity. The primary design driver was that each
+instruction could be decoded from a single 16 bit word. This naturally resulted
+in a 16 bit system where even the memory unit size is 16 bits.
+
+In the case of this document, a "word" is considered 16 bits of data. There is
+no concept of a byte. I agree, this is wierd but it kept things simple.
+
+System Memory 
+════════════════════════════════════════════════════════════════════════════════
+
+Single Word Addressing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The EMU101 Architecture is different from other systems in that it is not
+single byte addressable. Instead, the memory is single word addressable.
+A word is 16 bits or 2 bytes. 
+
+As an example, consider the following memory values:
+
+  ┌────┬────┬────┬────┐
+  │ 00 │ 01 │ 02 │ 03 │ <- Address
+  ┝━━━━┿━━━━┿━━━━┿━━━━┥
+  │ABCD│CDEF│0123│4567│ <- Data
+  └────┴────┴────┴────┘
+
+The first thing to notice is that each addressed value is 2 bytes long. This is
+the effect of the system being single word addressable.
+
+If the system reads the data at address 02, the resulting word is 0x0123
+Its value is 0x123. 
+
+
+Since the smallest unit of memory in this system is 1 word (16 bits), the value
+0x0123 is not constructed of 2 bytes but rather 1 word. Furthermore, the system
+has no ability to do operations on double words.
+
+As a result, Memory values are in order as read and endianess doesn't apply.
+
+System Memory Map
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   START  │ END    │ Content           │ Size (words)
+   ━━━━━━━┿━━━━━━━━┿━━━━━━━━━━━━━━━━━━━┿━━━━━━━━━━━━━
+   0x0000 │ 0x01FF │ Stack             │ 512
+   0x0200 │ 0xEFFF │ General Purpose   │ 59.5k
+   0xF000 │ 0xFFFF │ PROG              │ 4k
 
 
 Instruction Pipeline Loading
+════════════════════════════════════════════════════════════════════════════════
 
 Each instruction consists of a single 16 bit word and an optional immediate
-16 bit word. Each fetch cycle ensures the pipeline has two 16 bit words loaded.
+word. Each fetch cycle ensures the pipeline has two words loaded.
 
-The Instruction Pointer is moved forward by 2 with each word fetched. The
-values are interprated as 16 bit unsinged integers and pushed into a queue
-called the Instruction Pipeline (PIPLINE).
+The Instruction Pointer is moved forward by 1 with each word fetched. The
+values are pushed into a queue called the Instruction Pipeline (PIPLINE).
 
-Memory (Byte order is little-endian):
+Consider the following memory during the pipeline fetch cycle:
 
-  ┌──┬──┬──┬──┐
-  │ab│cd│ef│01│ PIPELINE:
-  └──┴──┴──┴──┘
+  ┌────┬────┐
+  │abcd│ef01│ PIPELINE:
+  └────┴────┘
    ↑(IP+0)
-  ┌──┬──┬──┬──┐
-  │ab│cd│ef│01│ PIPELINE: 0xCDAB
-  └──┴──┴──┴──┘
-         ↑(IP+2)
-  ┌──┬──┬──┬──┐
-  │ab│cd│ef│01│ PIPELINE: 0xCDAB, 0x01EF
-  └──┴──┴──┴──┘
-               ↑(IP+4)
+  ┌────┬────┐
+  │abcd│ef01│ PIPELINE: 0xABCD
+  └────┴────┘
+        ↑(IP+1)
+  ┌────┬────┐
+  │abcd│ef01│ PIPELINE: 0xABCD, 0xEF01
+  └────┴────┘
+             ↑(IP+2)
 
 Each fetch cycle ensures 2 values exist in the instruction pipeline.
 
 After the pipeline is filled, the first value is pulled and used as instruction.
-  0xCDAB is popped from PIPELINE and stored in the Instruction Register
+  0xABCD is popped from PIPELINE and stored in the Instruction Register
 
 If applicable, the second value is pulled and used as immediate.
-  0x01EF is popped from PIPELINE and stored in immediate register IF S=11*
+  0xEF01 is popped from PIPELINE and stored in immediate register IF S=11*
 
 During next fetch cycle, if the immediate register is used, 2 words will
 be loaded into the pipeline.
@@ -47,6 +98,7 @@ the last word fetched from the previous cycle will be used as the instruction.
 
 
 Instruction Decoding
+════════════════════════════════════════════════════════════════════════════════
 
 Each instruction is a single 16 bit word. The single word can be used to preform
 every operation of the EMU101 processor. The instruction is split into 6 parts.
@@ -55,6 +107,15 @@ every operation of the EMU101 processor. The instruction is split into 6 parts.
   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐
   │W│A│A│C│C│C│C│C│S│S│D│D│D│J│J│J│ 
   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+
+   Symbol │ Description
+  ────────┼───────────────────
+     W    │ IO Select
+     A    │ Address Select
+     C    │ Computation Select
+     S    │ Source Select
+     D    │ Destination Select
+     J    │ Condition Select
 
 
 I/O Select
@@ -163,7 +224,7 @@ Description: Defines a Condition that must evaluate to true to store the result.
 Size: 3 bits
 Symbol: J
 
-   0 1 2 │ DST
+   0 1 2 │ Condition
   ───────┼─────────
    0 0 0 │ False
    0 0 1 │ LT
@@ -241,5 +302,4 @@ Examples
   │ B    D    3    F                                   │
   │ 0xBD3F -> PUSH D0|D2                               │
   └────────────────────────────────────────────────────┘
-
 

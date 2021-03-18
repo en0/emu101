@@ -1,12 +1,12 @@
-from .bus import Bus
-from .ram import RAM
-from .rom import ROM
+from argparse import ArgumentParser, FileType
 
-bios = ROM(0x100)
-memory = RAM(0x100)
-bus = Bus({
-    (0xFF00, 0x100): bios,
-    (0x0000, 0x100): memory,
-})
-from pprint import pprint as pp
-pp(bus._map)
+
+def get_opts():
+    ap = ArgumentParser()
+    ap.add_argument("PROG", type=FileType, help="Path to program.")
+    return ap.parse_args()
+
+
+def main():
+    opts = get_opts()
+    ...

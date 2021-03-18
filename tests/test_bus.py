@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, Mock
 from emu101.bus import Bus
-from emu101.typing import c_uint16, c_uint8, BusInterface
+from emu101.typing import c_uint16, BusInterface
 
 
 class BusTest(unittest.TestCase):
@@ -54,7 +54,7 @@ class BusTest(unittest.TestCase):
 
     def test_write_map_offset_at_zero(self):
         for val, i in enumerate(range(0, 5)):
-            val = c_uint8(val)
+            val = c_uint16(val)
             addr = c_uint16(i)
             self.bus.write(addr, val)
             actual_addr, actual_val = self.m1.write.call_args[0]
@@ -63,7 +63,7 @@ class BusTest(unittest.TestCase):
 
     def test_write_map_offset_at_none_zero(self):
         for val, i in enumerate(range(5, 10)):
-            val = c_uint8(val)
+            val = c_uint16(val)
             addr = c_uint16(i)
             self.bus.write(addr, val)
             actual_addr, actual_val = self.m2.write.call_args[0]
@@ -72,6 +72,6 @@ class BusTest(unittest.TestCase):
             self.assertEqual(actual_val.value, val.value)
 
     def test_write_does_nothing_if_no_mapping(self):
-        self.bus.write(c_uint16(11), c_uint8(1))
+        self.bus.write(c_uint16(11), c_uint16(1))
         self.m1.write.assert_not_called()
         self.m2.write.assert_not_called()

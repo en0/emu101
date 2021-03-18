@@ -1,5 +1,5 @@
 from typing import Dict, Tuple, List
-from .typing import BusInterface, c_uint16, c_uint8
+from .typing import BusInterface, c_uint16
 
 
 class Bus(BusInterface):
@@ -11,7 +11,7 @@ class Bus(BusInterface):
             for addr in range(start, start + length):
                 self._map[c_uint16(addr).value] = comp
 
-    def read(self, addr: c_uint16) -> c_uint8:
+    def read(self, addr: c_uint16) -> c_uint16:
         comp: BusInterface = self._map[addr.value]
         if comp is None:
             return c_uint16(0)
@@ -19,7 +19,7 @@ class Bus(BusInterface):
         ref_addr = c_uint16(addr.value - offset)
         return comp.read(ref_addr)
 
-    def write(self, addr: c_uint16, value: c_uint8) -> None:
+    def write(self, addr: c_uint16, value: c_uint16) -> None:
         comp: BusInterface = self._map[addr.value]
         if comp is None:
             return
