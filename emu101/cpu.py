@@ -1,5 +1,5 @@
 from collections import deque
-from enum import Enum
+from enum import Enum, IntFlag
 from .typing import c_uint16, CPUInterface
 
 
@@ -15,10 +15,10 @@ class IOSelect(Enum):
 
 
 class AddressSelect(Enum):
-    DP_D0 = 0b000000000000000
-    DP    = 0b010000000000000
-    DSP   = 0b100000000000000
-    ISP   = 0b110000000000000
+    DP   = 0b000000000000000
+    SP   = 0b010000000000000
+    DPD0 = 0b100000000000000
+    SPD0 = 0b110000000000000
 
 
 class ComputeSelect(Enum):
@@ -85,6 +85,12 @@ class ConditionSelect(Enum):
     TRUE  = 0b111
 
 
+class ConditionFlags(IntFlag):
+    LT    = 0b001
+    EQ    = 0b010
+    GT    = 0b100
+
+
 class CPU(CPUInterface):
     def __init__(self, bus):
 
@@ -103,7 +109,9 @@ class CPU(CPUInterface):
         self.immediate = c_uint16(0)
         self.pipeline = deque()
 
-        self.data = c_uint16(0)
+        self.data_in = c_uint16(0)
+        self.alu_out = c_uint16(0)
+        self.flags = c_uint16(0)
 
         # Other Things
         self._bus = bus
@@ -134,68 +142,140 @@ class CPU(CPUInterface):
             self._phase = InstructionPhase.DECODE_INSTRUCTION
         else:
             raise RuntimeError("Um, pipline overflow?")
-        return self._fetch_instruction
 
     def _decode_instruction(self):
 
         instruction = self.pipeline.pop()
         self.instruction.value = instruction
-
-        # HLT instruction is special case
-        if instruction == 0:
-            self._halt = True
-
-        # Write to ram
-        self._io_select = IOSelect(instruction & 0b1000000000000000)
-        # Ram address source
-        self._address_select = AddressSelect(instruction & 0b0110000000000000)
-        # ALU (and input) operation
-        self._comp_select = ComputeSelect(instruction & 0b0001111100000000)
-        # Register Write Source Select
-        self._source_select = SourceSelect(instruction & 0b0000000011000000)
-        # Register Write Destination  Select
-        self._dest_select = DestSelect(instruction & 0b0000000000111000)
-        # Conditional
-        self._cond_select = ConditionSelect(instruction & 0b0000000000000111)
-        print(self._io_select, self._address_select, self._comp_select, self._source_select, self._dest_select, self._cond_select)
         self._phase = InstructionPhase.EXECUTE_INSTRUCTION
 
+        if instruction == 0xffff:
+            # HLT instruction is special case
+            self._halt = True
+            self._io_select = IOSelect.READ
+            self._address_select = AddressSelect.DP
+            self._comp_select = ComputeSelect.MINUS_D0D0
+            self._source_select = SourceSelect.ZERO
+            self._dest_select = DestSelect.D0
+            self._cond_select = ConditionSelect.FALSE
+        else:
+            self._io_select = IOSelect(instruction & 0b1000000000000000)
+            self._address_select = AddressSelect(instruction & 0b0110000000000000)
+            self._comp_select = ComputeSelect(instruction & 0b0001111100000000)
+            self._source_select = SourceSelect(instruction & 0b0000000011000000)
+            self._dest_select = DestSelect(instruction & 0b0000000000111000)
+            self._cond_select = ConditionSelect(instruction & 0b0000000000000111)
+
     def _execute_instruction(self):
-        #self._execute_alu()
-        self._execute_io()
-        #self._execute_store()
         self._phase = InstructionPhase.FETCH_INSTRUCTION
+        self._execute_alu()
+        self._execute_io()
+        self._execute_store()
+
+    def _execute_store(self):
+        val = {
+            SourceSelect.ALU: (lambda: self.alu_out),
+            SourceSelect.DATA: (lambda: self.data_in),
+            SourceSelect.IMMEDIATE: (lambda: c_uint16(self.pipeline.pop())),
+            SourceSelect.ZERO: (lambda: c_uint16(0))
+        }[self._source_select]()
+
+        if bool(self.flags.value & self._cond_select.value):
+            {
+                DestSelect.D0: self.d0,
+                DestSelect.D1: self.d1,
+                DestSelect.D2: self.d2,
+                DestSelect.N1: c_uint16(0),
+                DestSelect.IP: self.ip,
+                DestSelect.SP: self.sp,
+                DestSelect.DP: self.dp,
+                DestSelect.N2: c_uint16(0),
+            }[self._dest_select].value = val.value
+
+    def _execute_alu(self):
+        result = {
+            ComputeSelect.MINUS_D0D0: (lambda: self.d0.value - self.d0.value),
+            ComputeSelect.MINUS_D0D1: (lambda: self.d0.value - self.d1.value),
+            ComputeSelect.MINUS_D0D2: (lambda: self.d0.value - self.d2.value),
+            ComputeSelect.OUT_D0: (lambda: self.d0.value),
+            ComputeSelect.ADD_D0D0: (lambda: self.d0.value + self.d0.value),
+            ComputeSelect.ADD_D0D1: (lambda: self.d0.value + self.d1.value),
+            ComputeSelect.ADD_D0D2: (lambda: self.d0.value + self.d2.value),
+            ComputeSelect.OUT_D1: (lambda: self.d1.value),
+            ComputeSelect.AND_D0D0: (lambda: self.d0.value & self.d0.value),
+            ComputeSelect.AND_D0D1: (lambda: self.d0.value & self.d1.value),
+            ComputeSelect.AND_D0D2: (lambda: self.d0.value & self.d2.value),
+            ComputeSelect.OUT_D2: (lambda: self.d2.value),
+            ComputeSelect.OR_D0D0: (lambda: self.d0.value | self.d0.value),
+            ComputeSelect.OR_D0D1: (lambda: self.d0.value | self.d1.value),
+            ComputeSelect.OR_D0D2: (lambda: self.d0.value | self.d2.value),
+            ComputeSelect.ROLL_D0: (lambda: self.d0.value << 1),
+            ComputeSelect.XOR_D0D0: (lambda: self.d0.value ^ self.d0.value),
+            ComputeSelect.XOR_D0D1: (lambda: self.d0.value ^ self.d1.value),
+            ComputeSelect.XOR_D0D2: (lambda: self.d0.value ^ self.d2.value),
+            ComputeSelect.OUT_IP: (lambda: self.ip.value),
+            ComputeSelect.INC_D0: (lambda: self.d0.value + 1),
+            ComputeSelect.INC_D1: (lambda: self.d1.value + 1),
+            ComputeSelect.INC_D2: (lambda: self.d2.value + 1),
+            ComputeSelect.OUT_SP: (lambda: self.sp.value),
+            ComputeSelect.DEC_D0: (lambda: self.d0.value - 1),
+            ComputeSelect.DEC_D1: (lambda: self.d1.value - 1),
+            ComputeSelect.DEC_D2: (lambda: self.d2.value - 1),
+            ComputeSelect.OUT_DP: (lambda: self.dp.value),
+            ComputeSelect.NOT_D0: (lambda: ~self.d0.value),
+            ComputeSelect.NOT_D1: (lambda: ~self.d1.value),
+            ComputeSelect.NOT_D2: (lambda: ~self.d2.value),
+            ComputeSelect.ROLR_D0: (lambda: self.d0.value >> 1),
+        }[self._comp_select]()
+
+        self.flags.value = (
+            ConditionFlags.GT if result > 0 else 0 |
+            ConditionFlags.LT if result < 0 else 0 |
+            ConditionFlags.EQ if result == 0 else 0
+        )
+
+        self.alu_out.value = result
 
     def _execute_io(self):
         if self._io_select == IOSelect.READ:
-            self.data = self._execute_read()
-        elif self._io_select == IOSelect.WRITE:
+            self._execute_read()
+        elif (
+            self._io_select == IOSelect.WRITE and
+            bool(self.flags.value & self._cond_select.value)
+        ):
             self._execute_write()
             
     def _execute_read(self):
         if self._address_select == AddressSelect.DP:
-            return self._bus.read(self.dp)
-        if self._address_select == AddressSelect.DP_D0:
-            return self._bus.read(c_uint16(self.dp.value + self.d0.value))
-        if self._address_select == AddressSelect.DSP:
-            self.sp.value -= 1
-            return self._bus.read(self.sp)
-        if self._address_select == AddressSelect.ISP:
-            return self._bus.read(self.sp)
+            self.data_in = self._bus.read(self.dp)
+
+        elif self._address_select == AddressSelect.SP:
+            self.data_in = self._bus.read(self.sp)
             self.sp.value += 1
+
+        elif self._address_select == AddressSelect.DPD0:
+            addr = c_uint16(self.dp.value + self.d0.value)
+            self.data_in = self._bus.read(addr)
+
+        elif self._address_select == AddressSelect.SPD0:
+            addr = c_uint16(self.sp.value + self.d0.value)
+            self.data_in = self._bus.read(addr)
 
     def _execute_write(self):
         if self._address_select == AddressSelect.DP:
-            return self._bus.write(self.dp, self.data)
-        if self._address_select == AddressSelect.DP_D0:
-            addr = c_uint16(self.dp.value + self.d0.value)
-            return self._bus.write(addr, self.data)
-        if self._address_select == AddressSelect.DSP:
+            self._bus.write(self.dp, self.alu_out)
+
+        elif self._address_select == AddressSelect.SP:
             self.sp.value -= 1
-            return self._bus.write(self.sp, self.data)
-        if self._address_select == AddressSelect.ISP:
-            return self._bus.write(self.sp, self.data)
-            self.sp.value += 1
+            self._bus.write(self.sp, self.alu_out)
+
+        elif self._address_select == AddressSelect.DPD0:
+            addr = c_uint16(self.dp.value + self.d0.value)
+            self._bus.write(addr, self.alu_out)
+
+        elif self._address_select == AddressSelect.SPD0:
+            addr = c_uint16(self.sp.value + self.d0.value)
+            self._bus.write(addr, self.alu_out)
 
     def tick(self):
         if self._halt:
