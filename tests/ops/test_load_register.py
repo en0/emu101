@@ -14,25 +14,23 @@ class LoadRegTest(unittest.TestCase):
             for w in words
         ])))
 
-    @unittest.skip('WIP')
     def test_ldp(self):
         self.load_rom([
             0b0000000011110111, 0xabcd, # ldp 0xabcd
+            0b0000000000000000, # hlt
         ])
         self.emu.run()
         self.assertEqual(self.emu.cpu.dp.value, 0xabcd)
         
-    @unittest.skip('WIP')
     def test_hlt(self):
         self.load_rom([
             0b0000000000000000, #hlt
         ])
         self.emu.run()
-        self.assertEqual(self.emu.cpu.dp.value, 0xabcd)
 
     def test_loads_pipeline(self):
         self.load_rom([
             0b0000000000000000, #hlt
         ])
         self.emu.run()
-        self.assertEqual(len(self.emu.cpu.pipeline), 2)
+        self.assertEqual(len(self.emu.cpu.pipeline), 1)
