@@ -130,7 +130,7 @@ Symbol: W
    1 │ Write
 
 
-Addess Select
+Address Select
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Description: Selects a register for address line output
 Size: 2 bits

@@ -116,6 +116,7 @@ class CPU(CPUInterface):
         # Other Things
         self._bus = bus
         self._halt = False
+        self._debug = False
         self._io_select = IOSelect.READ
         self._address_select = AddressSelect.DP
         self._source_select = SourceSelect.ZERO
@@ -147,11 +148,18 @@ class CPU(CPUInterface):
 
         instruction = self.pipeline.pop()
         self.instruction.value = instruction
-        self._phase = InstructionPhase.EXECUTE_INSTRUCTION
 
         if instruction == 0xffff:
             # HLT instruction is special case
             self._halt = True
+            self._io_select = IOSelect.READ
+            self._address_select = AddressSelect.DP
+            self._comp_select = ComputeSelect.MINUS_D0D0
+            self._source_select = SourceSelect.ZERO
+            self._dest_select = DestSelect.D0
+            self._cond_select = ConditionSelect.FALSE
+        elif instruction == 0b0101010101010101:
+            self._debug = True
             self._io_select = IOSelect.READ
             self._address_select = AddressSelect.DP
             self._comp_select = ComputeSelect.MINUS_D0D0
@@ -166,11 +174,13 @@ class CPU(CPUInterface):
             self._dest_select = DestSelect(instruction & 0b0000000000111000)
             self._cond_select = ConditionSelect(instruction & 0b0000000000000111)
 
+        self._phase = InstructionPhase.EXECUTE_INSTRUCTION
+
     def _execute_instruction(self):
-        self._phase = InstructionPhase.FETCH_INSTRUCTION
         self._execute_alu()
         self._execute_io()
         self._execute_store()
+        self._phase = InstructionPhase.FETCH_INSTRUCTION
 
     def _execute_store(self):
         val = {
@@ -191,6 +201,10 @@ class CPU(CPUInterface):
                 DestSelect.DP: self.dp,
                 DestSelect.N2: c_uint16(0),
             }[self._dest_select].value = val.value
+
+            # if dest is IP, the pipeline needs to be cleared
+            if self._dest_select == DestSelect.IP:
+                self.pipeline.clear()
 
     def _execute_alu(self):
         result = {
@@ -281,4 +295,28 @@ class CPU(CPUInterface):
         if self._halt:
             return False
         self._tick[self._phase]()
+        if self._debug:
+            self.core_dump()
+            import pdb; pdb.set_trace()
         return not self._halt
+
+    def core_dump(self):
+        print("")
+        print("EMU101 Core Dump -------------------")
+        print("Panic in phase", self._phase)
+        print("")
+        print("ip: {:04x} ({:016b})".format(self.ip.value, self.ip.value))
+        print("sp: {:04x} ({:016b})".format(self.sp.value, self.sp.value))
+        print("dp: {:04x} ({:016b})".format(self.dp.value, self.dp.value))
+        print("d0: {:04x} ({:016b})".format(self.d0.value, self.d0.value))
+        print("d1: {:04x} ({:016b})".format(self.d1.value, self.d1.value))
+        print("d2: {:04x} ({:016b})".format(self.d2.value, self.d2.value))
+        print("")
+        print("instruction: {:016b}".format(self.instruction.value))
+        print("immediate:   {:04x}".format(self.immediate.value))
+        print("pipeline:   [{}]".format(", ".join(["{:04x}".format(v) for v in self.pipeline])))
+        print("")
+        print("data_in: {:04x}".format(self.data_in.value))
+        print("alu_out: {:04x}".format(self.alu_out.value))
+        print("flags:   {:016b}".format(self.flags.value))
+        print("")
