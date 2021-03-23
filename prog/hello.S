@@ -11,7 +11,8 @@ loop:   D2=ADD D1
         D1=D2
         D2=DATA
         D2,DATA=DEC D2
-        IP=@LOOP:?NZ,D2
-        DP=@OUT
+        IP=@loop?NZ,D2
+        DP=@out
         DATA=D0
         HLT
+

@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, FileType
+from .assembler import Assembler
 
 
 def get_opts():
@@ -9,7 +10,8 @@ def get_opts():
 
 def main():
     opts = get_opts()
-    print(opts)
+    a = Assembler(opts.SRC)
+    a.assemble()
 
 
 if __name__ == "__main__":
