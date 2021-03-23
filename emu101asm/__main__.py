@@ -3,7 +3,7 @@ from argparse import ArgumentParser, FileType
 
 def get_opts():
     ap = ArgumentParser()
-    ap.add_argument("PROG", type=FileType('rb'), help="Path to program.")
+    ap.add_argument("SRC", type=FileType('r'), help="Path to source code.")
     return ap.parse_args()
 
 

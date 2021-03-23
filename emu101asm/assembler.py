@@ -1,0 +1,3 @@
+class Assembler:
+    def __init__(self, prog_offset, ram_offset):
+        ...
