@@ -3,7 +3,8 @@
 # to test the emu101
 
 main:   DP=@i
-        DATA=!5
+        D0=!10
+        DATA=D0
         D0=!0
         D1=!1
 loop:   D2=ADD D1
@@ -11,8 +12,9 @@ loop:   D2=ADD D1
         D1=D2
         D2=DATA
         D2,DATA=DEC D2
-        IP=@loop?NZ,D2
+        # This should be IP=@loop?NZ,D2 but i got a issue in the assembler
+        IP=!0xf009?NZ,D2
         DP=@out
-        DATA=D0
+        DATA=D1
         HLT
 

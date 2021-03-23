@@ -23,6 +23,7 @@ class EMU:
     def run(self):
         try:
             while self.cpu.tick(): ...
+            self.core_dump()
         except:
             self.core_dump()
             raise

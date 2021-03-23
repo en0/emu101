@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, FileType
+from .emu import EMU
 
 
 def get_opts():
@@ -9,7 +10,9 @@ def get_opts():
 
 def main():
     opts = get_opts()
-    print(opts)
+    emu = EMU()
+    emu.rom.load(opts.PROG)
+    emu.run()
 
 
 if __name__ == "__main__":
