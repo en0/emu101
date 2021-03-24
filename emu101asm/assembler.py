@@ -2,6 +2,7 @@ import re
 from itertools import count
 from io import FileIO
 from enum import IntFlag
+from typing import NamedTuple
 
 
 _re_label = re.compile(r"^(\w+):(.*)")
@@ -88,6 +89,26 @@ source_map = {
 }
 
 
+class AssemblyBytes(NamedTuple):
+    bytecode: bytes
+    opcode: str 
+    line_no: int
+    has_imm: bool
+
+
+class CompileError(RuntimeError):
+    def __init__(self, line_no: int, label: str, symbol: str, info: str):
+        self.line_no = line_no
+        self.label = label
+        self.symbol = symbol
+        self.info = info
+
+
+class DecodingError(RuntimeError):
+    def __init__(self, info):
+        self.info = info
+
+
 class Assembler:
     def __init__(self, in_fp: FileIO, out_fp: FileIO, prog_offset=0x0200, ram_offset=0xf000):
         self._ram = count(prog_offset)
@@ -96,6 +117,8 @@ class Assembler:
         self._fp = in_fp
         self._out = out_fp
         self._refs = {}
+        self._assembled_bytes = []
+        self._pending_refs = {}
 
     def _iter(self):
         last_label = None
@@ -120,61 +143,30 @@ class Assembler:
 
     def _get_ref(self, label):
         if label not in self._refs:
-            self._add_ref(label, next(self._ram))
+            self._add_label(label, next(self._ram))
         return self._refs[label]
 
-    def _add_ref(self, label, offset):
-        self._refs[label] = offset
-
-    def _find_labels(self):
-        self._fp.seek(0)
-        self._refs = {}
-        for i, (_, label, line) in enumerate(self._iter()):
-            offset = self._prog + i
-            if label is not None:
-                self._add_ref(label, offset)
-
-    def _emit(self, val, imm, op):
-        self._out.write(val.to_bytes(2, "big"))
-        if imm is None:
-            print("{:04x} {:016b}     ".format(self._offset, val), op)
-
-        if imm is not None:
-            self._out.write(imm.to_bytes(2, "big"))
-            print("{:04x} {:016b} {:04x}".format(self._offset, val, imm), op)
-            self._offset += 1
-
-        self._offset += 1
-
-    def _assemble(self):
-        # TODO: Need a catch that shows line_no and error info
-        self._fp.seek(0)
-        for line_no, label, op in self._iter():
-            code = 0b0000000000000000
-            imm = None
-            op_match = _re_op.match(op)
-            if op == "hlt":
-                code = 0b1111111111111111
-            elif op == "nop" or op == "noop":
-                code = 0b0000000000000000
-            elif op == "brk":
-                code = 0b0101010101010101
-            elif op_match:
-                c = op_match.groupdict()
-                code |= self._decode_dst(**c)
-                src_code, imm = self._decode_src(**c)
-                code |= src_code
-                code |= self._decode_cond(**c)
-            else:
-                raise Exception(f"What you mean? {line_no}, {op}")
-            self._emit(code, imm, op)
+    def _add_label(self, label, offset=None):
+        if offset is None:
+            self._refs[label] = len(self._assembled_bytes)+self._prog
+        else:
+            self._refs[label] = offset
 
     def _decode_cond(self, cond, cond_src, **kwargs):
         if cond is None:
             return condition_map["default"]
-        code = condition_map[cond]
-        if cond_src is not None:
+
+        if cond in condition_map:
+            code = condition_map[cond]
+        else:
+            raise DecodingError("Unknown Conditional")
+
+        if cond_src is not None and cond_src in compute_map:
             code |= compute_map[cond_src]
+
+        elif cond_src is not None:
+            raise DecodingError("Unknown Source or Computation in Conditional")
+
         return code
 
     def _decode_src(self, src, **kwargs):
@@ -189,31 +181,136 @@ class Assembler:
             imm = int(src[1:], 10)
             code = source_map["!"]
         elif src.startswith("@"):
-            imm = self._get_ref(src[1:])
+            imm = src[1:]
             code = source_map["@"]
         elif src == "data":
             code = source_map["data"]
-        else:
+        elif src in compute_map:
             code = compute_map[src] | source_map["alu"]
+        else:
+            raise DecodingError("Unknown Source or Computation")
+
         return code, imm
 
     def _decode_dst(self, dst, dst_b, **kwargs):
+
+        def get_dest(d):
+            try:
+                return dest_map[d]
+            except KeyError:
+                raise DecodingError("Unknown Destination")
+
         code = dest_map["default"]
         if dst_b is None and dst == 'data':
             code = io_map["w"] | dest_map["default"] | address_map["dp"]
         elif dst_b is None:
-            code = dest_map[dst]
+            code = get_dest(dst)
         elif dst == dst_b:
-            raise Exception("That makes no sense")
+            raise DecodingError("Duplicate Destination Error")
         elif dst_b == 'data':
-            code = io_map["w"] | dest_map[dst] | address_map["dp"]
+            code = io_map["w"] | get_dest(dst) | address_map["dp"]
         elif dst == 'data':
-            code = io_map["w"] | dest_map[dst_b] | address_map["dp"]
+            code = io_map["w"] | get_dest(dst_b) | address_map["dp"]
         else:
-            raise Exception("Bad destination")
+            raise DecodingError("Unknown Destination Error")
         return code
 
+    def _append_bytes(self, code: int, imm, opcode, lineno):
+        self._assembled_bytes.append(AssemblyBytes(
+            bytecode=code.to_bytes(2, "big"),
+            opcode=opcode,
+            line_no=lineno,
+            has_imm=imm is not None
+        ))
+
+        if isinstance(imm, int):
+            self._assembled_bytes.append(AssemblyBytes(
+                bytecode=imm.to_bytes(2, "big"),
+                opcode=opcode,
+                line_no=lineno,
+                has_imm=False
+            ))
+
+        elif isinstance(imm, str):
+            self._pending_refs[len(self._assembled_bytes)] = imm
+            self._assembled_bytes.append(AssemblyBytes(
+                bytecode=None,
+                opcode=opcode,
+                line_no=lineno,
+                has_imm=False
+            ))
+
+    def _set_bytes(self, val: int, offset: int):
+        ab = self._assembled_bytes[offset]
+        self._assembled_bytes[offset] = AssemblyBytes(
+            bytecode=val.to_bytes(2, 'big'),
+            opcode=ab.opcode,
+            line_no=ab.line_no,
+            has_imm=ab.has_imm,
+        )
+
     def assemble(self):
-        # TODO: Got a big problem with refs.
-        self._find_labels()
-        self._assemble()
+        try:
+            for line_no, label, op in self._iter():
+                try:
+                    self._add_label(label)
+                    code = 0b0000000000000000
+                    imm = None
+                    op_match = _re_op.match(op)
+                    if op == "hlt":
+                        code = 0b1111111111111111
+                    elif op == "nop" or op == "noop":
+                        code = 0b0000000000000000
+                    elif op == "brk":
+                        code = 0b0101010101010101
+                    elif op_match:
+                        c = op_match.groupdict()
+                        code |= self._decode_dst(**c)
+                        src_code, imm = self._decode_src(**c)
+                        code |= src_code
+                        code |= self._decode_cond(**c)
+                    else:
+                        raise CompileError(line_no, label, op, "Syntax Error")
+                except DecodingError as ex:
+                    raise CompileError(line_no, label, op, ex.info) from ex
+                except CompileError as ex:
+                    raise
+                except Exception as ex:
+                    raise CompileError(line_no, label, op, "Unknown Error") from ex
+                else:
+                    self._append_bytes(code, imm, op, line_no)
+        except CompileError as ex:
+            print(f"{ex.info}\nLine: {ex.line_no}, Symbol: {ex.symbol}")
+            return
+
+        self._fulfill_pending_refs()
+        self._write_assembly()
+
+    def _fulfill_pending_refs(self):
+        for offset, label in self._pending_refs.items():
+            addr = self._get_ref(label)
+            self._set_bytes(addr, offset)
+
+    def _write_assembly(self):
+        assembly_bytes = enumerate(iter(self._assembled_bytes))
+        try:
+            while True:
+                i, ab = next(assembly_bytes)
+                self._out.write(ab.bytecode)
+                if ab.has_imm:
+                    _, imm = next(assembly_bytes)
+                    self._out.write(imm.bytecode)
+                    print("{:04x}: {:016b} {:04x} {}".format(
+                        i + self._prog,
+                        int.from_bytes(ab.bytecode, "big"),
+                        int.from_bytes(imm.bytecode, "big"),
+                        ab.opcode,
+                    ))
+                else:
+                    print("{:04x}: {:016b} ---- {}".format(
+                        i + self._prog,
+                        int.from_bytes(ab.bytecode, "big"),
+                        ab.opcode,
+                    ))
+        except StopIteration:
+            pass

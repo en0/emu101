@@ -1,6 +1,7 @@
 from math import inf
 from typing import IO
 from pprint import pprint as pp
+from ctypes import c_uint16
 from .bus import Bus
 from .ram import RAM
 from .rom import ROM
@@ -24,6 +25,7 @@ class EMU:
         try:
             while self.cpu.tick(): ...
             self.core_dump()
+            print("ans:", self.bus.read(c_uint16(0x0201)).value)
         except:
             self.core_dump()
             raise
