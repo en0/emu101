@@ -25,7 +25,7 @@ class EMU:
         try:
             while self.cpu.tick(): ...
             self.core_dump()
-            print("ans:", self.bus.read(c_uint16(0x0201)).value)
+            print("ans:", self.bus.read(c_uint16(0x0200)).value)
         except:
             self.core_dump()
             raise

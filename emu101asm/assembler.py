@@ -185,6 +185,8 @@ class Assembler:
             code = source_map["@"]
         elif src == "data":
             code = source_map["data"]
+        elif src == "stack":
+            code = source_map["data"]
         elif src in compute_map:
             code = compute_map[src] | source_map["alu"]
         else:
@@ -197,20 +199,26 @@ class Assembler:
         def get_dest(d):
             try:
                 return dest_map[d]
-            except KeyError:
+            except KeyError as ex:
                 raise DecodingError("Unknown Destination")
 
         code = dest_map["default"]
         if dst_b is None and dst == 'data':
             code = io_map["w"] | dest_map["default"] | address_map["dp"]
+        elif dst_b is None and dst == 'stack':
+            code = io_map["w"] | dest_map["default"] | address_map["sp"]
         elif dst_b is None:
             code = get_dest(dst)
         elif dst == dst_b:
             raise DecodingError("Duplicate Destination Error")
         elif dst_b == 'data':
             code = io_map["w"] | get_dest(dst) | address_map["dp"]
+        elif dst_b == 'stack':
+            code = io_map["w"] | get_dest(dst) | address_map["sp"]
         elif dst == 'data':
             code = io_map["w"] | get_dest(dst_b) | address_map["dp"]
+        elif dst == 'stack':
+            code = io_map["w"] | get_dest(dst_b) | address_map["sp"]
         else:
             raise DecodingError("Unknown Destination Error")
         return code
