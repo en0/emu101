@@ -12,7 +12,6 @@ loop:   D2=ADD D1
         D1=D2
         D2=DATA
         D2,DATA=DEC D2
-        # This should be IP=@loop?NZ,D2 but i got a issue in the assembler
         IP=@loop?NZ,D2
         DP=@out
         DATA=D0
